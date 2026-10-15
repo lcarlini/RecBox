@@ -250,25 +250,36 @@
     </section>
 
     <section id="install">
-      <h2>Install &amp; run</h2>
+      <h2>Install &amp; update</h2>
+      <p style="color:var(--muted)">
+        Installers place RecBox under <code>%LocalAppData%\Programs\RecBox</code> (no admin),
+        create Start Menu shortcuts, and bundle FFmpeg.
+        Your settings stay in <code>%AppData%\RecBox</code> across upgrades.
+      </p>
 
-      <h3>Fastest — one command</h3>
-      <p style="color:var(--muted)">Install the <a href="https://dotnet.microsoft.com/download/dotnet/8.0">.NET 8 SDK</a>, clone the repo, then:</p>
-      <pre>powershell -ExecutionPolicy Bypass -File .\run.ps1</pre>
+      <h3>Setup.exe</h3>
+      <p style="color:var(--muted)">Download <code>RecBox-*-Setup.exe</code> from
+        <a href="https://github.com/lcarlini/RecBox/releases">GitHub Releases</a> and run it.
+        New versions: run the newer Setup — settings are preserved.</p>
+
+      <h3>Zip + PowerShell installer</h3>
+      <pre>powershell -ExecutionPolicy Bypass -File .\Install-RecBox.ps1 -FromZip .\RecBox-1.0.0-win-x64.zip -DesktopShortcut -Launch</pre>
+      <p style="color:var(--muted)">Or install/update from the latest GitHub Release:</p>
+      <pre>powershell -ExecutionPolicy Bypass -File .\Install-RecBox.ps1 -FromGitHub -DesktopShortcut -Launch</pre>
+
+      <h3>Developers — build packages</h3>
+      <pre>powershell -ExecutionPolicy Bypass -File .\build-installer.ps1</pre>
       <div class="callout">
-        <code>run.ps1</code> downloads FFmpeg if needed, builds RecBox, and opens the app.
+        Produces a versioned zip for Releases. If <a href="https://jrsoftware.org/isinfo.php">Inno Setup 6</a>
+        is installed, also builds <code>Setup.exe</code>. For day-to-day coding use <code>run.ps1</code>.
       </div>
-
-      <h3>Portable build (share as a zip)</h3>
-      <pre>powershell -ExecutionPolicy Bypass -File .\publish.ps1</pre>
-      <p style="color:var(--muted)">Creates <code>dist\RecBox\RecBox.exe</code> with FFmpeg included. Zip that folder — recipients double-click to run, no SDK required.</p>
 
       <h3>Requirements</h3>
       <ul>
         <li><strong>OS:</strong> Windows 10 or 11 (64-bit)</li>
-        <li><strong>To build:</strong> .NET 8 SDK</li>
-        <li><strong>Portable publish:</strong> no SDK on the target PC</li>
-        <li><strong>Optional:</strong> NVIDIA / AMD / Intel GPU for hardware encoding; NVIDIA Broadcast for filtered mic input</li>
+        <li><strong>End users:</strong> no .NET SDK needed (self-contained build)</li>
+        <li><strong>To build installers:</strong> .NET 8 SDK; optional Inno Setup 6 for Setup.exe</li>
+        <li><strong>Optional:</strong> NVIDIA / AMD / Intel GPU for hardware encoding; NVIDIA Broadcast for mic</li>
       </ul>
     </section>
 
