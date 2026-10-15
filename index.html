@@ -243,6 +243,10 @@
           <p>Clean dark interface with a one-click record control. Settings save automatically.</p>
         </div>
         <div class="card">
+          <h3>Never lose a take</h3>
+          <p>Crash-safe files, automatic resume if capture is interrupted, and recovery of unfinished recordings on next start.</p>
+        </div>
+        <div class="card">
           <h3>Easy to run</h3>
           <p>One PowerShell script downloads FFmpeg, builds, and launches. Or publish a portable folder.</p>
         </div>
@@ -268,10 +272,12 @@
       <pre>powershell -ExecutionPolicy Bypass -File .\Install-RecBox.ps1 -FromGitHub -DesktopShortcut -Launch</pre>
 
       <h3>Developers — build packages</h3>
-      <pre>powershell -ExecutionPolicy Bypass -File .\build-installer.ps1</pre>
+      <pre>build-installer.cmd</pre>
       <div class="callout">
         Produces a versioned zip for Releases. If <a href="https://jrsoftware.org/isinfo.php">Inno Setup 6</a>
-        is installed, also builds <code>Setup.exe</code>. For day-to-day coding use <code>run.ps1</code>.
+        is installed, also builds <code>Setup.exe</code>. For day-to-day coding use <code>run.cmd</code>
+        (bypasses PowerShell execution policy). Or:
+        <code>powershell -ExecutionPolicy Bypass -File .\run.ps1</code>.
       </div>
 
       <h3>Requirements</h3>
@@ -331,6 +337,20 @@
       <details>
         <summary>Where are my files?</summary>
         <p>Default: <code>%UserProfile%\Videos\RecBox</code>. Use <em>Open folder</em> in the app.</p>
+      </details>
+      <details>
+        <summary>RecBox or the PC crashed while recording</summary>
+        <p>Start RecBox again — it finds the unfinished recording and saves it as MP4 automatically
+          (“Recovered from last session”). If conversion is impossible, the playable <code>.mkv</code> is kept.</p>
+      </details>
+      <details>
+        <summary>The status says “Recording resumed”</summary>
+        <p>Capture was briefly interrupted (UAC prompt, lock screen, display change). RecBox resumed on its own
+          and all parts are joined into one file; a short gap may appear at that moment.</p>
+      </details>
+      <details>
+        <summary>Reporting a problem</summary>
+        <p>Attach the log from <code>%AppData%\RecBox\logs</code>.</p>
       </details>
     </section>
 

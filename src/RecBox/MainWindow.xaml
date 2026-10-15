@@ -94,10 +94,12 @@
                                                FontFamily="Segoe UI Variable Display, Cascadia Mono, Consolas"/>
                                     <TextBlock Text="Simple screen capture — no streaming, no clutter."
                                                Foreground="{StaticResource MutedBrush}" Margin="0,6,0,12"/>
-                                    <TextBlock x:Name="MonitorSummaryText" Text="" Foreground="{StaticResource MutedBrush}"/>
-                                    <TextBlock x:Name="EncoderText" Text="" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0"/>
-                                    <TextBlock x:Name="LastFileText" Text="" Foreground="{StaticResource MutedBrush}"
-                                               TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    <TextBlock x:Name="MonitorSummaryText" Text="" Foreground="{StaticResource MutedBrush}"/>
+                    <TextBlock x:Name="EncoderText" Text="" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0"/>
+                    <TextBlock x:Name="LastFileText" Text="" Foreground="{StaticResource MutedBrush}"
+                               TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    <TextBlock x:Name="WarningText" Text="" TextWrapping="Wrap" Margin="0,8,0,0"
+                               Foreground="#FFFFC857" Visibility="Collapsed"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="18,0,0,0">

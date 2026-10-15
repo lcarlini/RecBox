@@ -23,6 +23,9 @@ public sealed class TrayService : IDisposable
 
     public bool IsExitRequested => _isExitRequested;
 
+    /// <summary>Balloons would be captured in the video, so the owner can suppress them while recording.</summary>
+    public Func<bool>? SuppressBalloons { get; set; }
+
     public void Initialize()
     {
         _trayIcon = new TaskbarIcon
@@ -65,6 +68,8 @@ public sealed class TrayService : IDisposable
 
     public void ShowBalloon(string title, string message)
     {
+        if (SuppressBalloons?.Invoke() == true)
+            return;
         _trayIcon?.ShowBalloonTip(title, message, BalloonIcon.Info);
     }
 
@@ -78,11 +83,10 @@ public sealed class TrayService : IDisposable
         _suppressMinimizeToTray = false;
     }
 
-    public void RequestExit()
-    {
-        _isExitRequested = true;
-        ExitRequested?.Invoke(this, EventArgs.Empty);
-    }
+    public void RequestExit() => ExitRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Called once the owner has decided to really exit (window close is no longer redirected to tray).</summary>
+    public void MarkExiting() => _isExitRequested = true;
 
     private ContextMenu BuildMenu()
     {
@@ -113,7 +117,7 @@ public sealed class TrayService : IDisposable
         {
             _window.ShowInTaskbar = false;
             _window.Hide();
-            if (!_shownTrayHint)
+            if (!_shownTrayHint && SuppressBalloons?.Invoke() != true)
             {
                 _shownTrayHint = true;
                 ShowBalloon("RecBox", "Still running in the system tray. Double-click the icon to restore.");

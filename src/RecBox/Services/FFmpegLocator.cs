@@ -74,6 +74,9 @@ public sealed class FFmpegLocator
     }
 
     public static async Task<string> RunProcessAsync(string exePath, string arguments, int timeoutMs = 15000)
+        => (await RunProcessWithExitCodeAsync(exePath, arguments, timeoutMs)).Output;
+
+    public static async Task<(int ExitCode, string Output)> RunProcessWithExitCodeAsync(string exePath, string arguments, int timeoutMs = 15000)
     {
         using var process = new Process
         {
@@ -89,6 +92,7 @@ public sealed class FFmpegLocator
         };
 
         process.Start();
+        ChildProcessJob.Assign(process);
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
 
@@ -100,11 +104,11 @@ public sealed class FFmpegLocator
         catch (OperationCanceledException)
         {
             try { process.Kill(entireProcessTree: true); } catch { /* ignore */ }
-            throw new TimeoutException("FFmpeg probe timed out.");
+            throw new TimeoutException("FFmpeg timed out.");
         }
 
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
-        return stdout + Environment.NewLine + stderr;
+        return (process.ExitCode, stdout + Environment.NewLine + stderr);
     }
 }

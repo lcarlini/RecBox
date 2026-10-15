@@ -52,14 +52,16 @@ Add `-RemoveSettings` only if you also want to delete `%AppData%\RecBox`.
 
 **One-command run (dev):**
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\run.ps1
+```bat
+run.cmd
 ```
+
+(or `powershell -ExecutionPolicy Bypass -File .\run.ps1` if scripts are blocked by policy)
 
 **Create release packages** (portable zip + Setup.exe if [Inno Setup 6](https://jrsoftware.org/isinfo.php) is installed):
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build-installer.ps1
+```bat
+build-installer.cmd
 ```
 
 Outputs:
@@ -100,6 +102,23 @@ Bump the version in [`src/RecBox/RecBox.csproj`](src/RecBox/RecBox.csproj) (`<Ve
 - Hardware encode when available (NVENC → Quick Sync → AMF → x264)
 - MP4 output (H.264 + AAC)
 - Per-user installer with shortcuts and safe upgrades
+- RecBox's own window is excluded from the capture, even when it is open on the recorded monitor
+- Single instance — launching RecBox again just brings the running window back
+
+## Reliability (you should not lose a recording)
+
+- **Crash-safe files.** Video is written as MKV in small flushed chunks while recording; on stop it is
+  converted to MP4 and verified before the MKV is deleted. If RecBox, Windows or the power dies,
+  at most a fraction of a second at the end is lost.
+- **Automatic recovery.** Unfinished recordings are detected and saved as MP4 the next time RecBox starts.
+- **Auto-resume.** If FFmpeg stops or stalls (UAC prompt, lock screen, display or GPU driver change),
+  RecBox restarts capture within seconds and joins everything into one file. If the hardware encoder
+  fails, it falls back to another encoder automatically.
+- **Audio devices.** A slow or unplugged microphone never stops the recording: it reconnects when it
+  comes back, and follows the Windows default device if you selected *Default*.
+- **Sleep, logoff and shutdown** stop and save the recording cleanly. The PC is kept awake while recording.
+- **Disk space.** Recording needs 1 GB free to start and stops cleanly (keeping the file) below 400 MB.
+- **Logs:** `%AppData%\RecBox\logs\recbox-YYYYMMDD.log` (kept for 14 days) — attach it when reporting a problem.
 
 ## Project layout
 
@@ -121,8 +140,13 @@ index.html              Product website & user guide
 ## Smoke test
 
 ```powershell
-dotnet run --project tools/SmokeTest/SmokeTest.csproj -c Release
+dotnet run --project tools/SmokeTest/SmokeTest.csproj -c Release          # all reliability tests
+dotnet run --project tools/SmokeTest/SmokeTest.csproj -c Release -- soak  # 5-minute recording
+powershell -ExecutionPolicy Bypass -File tools\SmokeTest\ui-test.ps1      # end-to-end test of the real app UI
 ```
+
+The reliability suite covers every audio mode, all monitors, all presets, encoder fallback, A/V sync,
+FFmpeg being killed mid-recording, repeated restart failures, rapid start/stop cycles and crash recovery.
 
 ## License notes
 

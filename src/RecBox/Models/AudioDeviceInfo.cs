@@ -7,4 +7,6 @@ public sealed class AudioDeviceInfo
     public bool IsDefault { get; init; }
 
     public string DisplayName => IsDefault ? $"{Name} (Default)" : Name;
+
+    public override string ToString() => DisplayName;
 }

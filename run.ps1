@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
 Write-Host ""
-Write-Host "  RecBox — setup & run" -ForegroundColor Cyan
+Write-Host "  RecBox - setup and run" -ForegroundColor Cyan
 Write-Host ""
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
