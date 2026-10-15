@@ -8,6 +8,8 @@ public sealed class TrayService : IDisposable
 {
     private readonly Window _window;
     private TaskbarIcon? _trayIcon;
+    private System.Drawing.Icon? _idleIcon;
+    private System.Drawing.Icon? _recordingIcon;
     private bool _isExitRequested;
     private bool _suppressMinimizeToTray;
     private bool _shownTrayHint;
@@ -34,18 +36,9 @@ public sealed class TrayService : IDisposable
             Visibility = Visibility.Visible
         };
 
-        try
-        {
-            var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "recbox.ico");
-            if (System.IO.File.Exists(iconPath))
-                _trayIcon.Icon = new System.Drawing.Icon(iconPath);
-            else
-                _trayIcon.Icon = System.Drawing.SystemIcons.Application;
-        }
-        catch
-        {
-            _trayIcon.Icon = System.Drawing.SystemIcons.Application;
-        }
+        _idleIcon = LoadIcon("recbox.ico") ?? System.Drawing.SystemIcons.Application;
+        _recordingIcon = LoadIcon("recbox-recording.ico") ?? _idleIcon;
+        _trayIcon.Icon = _idleIcon;
 
         _trayIcon.TrayMouseDoubleClick += (_, _) => ShowRequested?.Invoke(this, EventArgs.Empty);
         _trayIcon.ContextMenu = BuildMenu();
@@ -59,6 +52,9 @@ public sealed class TrayService : IDisposable
             return;
 
         _trayIcon.ToolTipText = isRecording ? "RecBox — Recording" : "RecBox";
+        var icon = isRecording ? _recordingIcon : _idleIcon;
+        if (icon is not null && !ReferenceEquals(_trayIcon.Icon, icon))
+            _trayIcon.Icon = icon;
         if (_trayIcon.ContextMenu is ContextMenu menu && menu.Items.Count > 1 &&
             menu.Items[1] is MenuItem startStop)
         {
@@ -87,6 +83,19 @@ public sealed class TrayService : IDisposable
 
     /// <summary>Called once the owner has decided to really exit (window close is no longer redirected to tray).</summary>
     public void MarkExiting() => _isExitRequested = true;
+
+    private static System.Drawing.Icon? LoadIcon(string fileName)
+    {
+        try
+        {
+            var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", fileName);
+            return System.IO.File.Exists(path) ? new System.Drawing.Icon(path) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private ContextMenu BuildMenu()
     {
@@ -133,5 +142,9 @@ public sealed class TrayService : IDisposable
             _trayIcon.Dispose();
             _trayIcon = null;
         }
+        if (!ReferenceEquals(_recordingIcon, _idleIcon))
+            _recordingIcon?.Dispose();
+        if (!ReferenceEquals(_idleIcon, System.Drawing.SystemIcons.Application))
+            _idleIcon?.Dispose();
     }
 }

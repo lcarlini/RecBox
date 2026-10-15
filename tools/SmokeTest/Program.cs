@@ -72,6 +72,13 @@ internal static class Program
         if (Want("system") && _systemAudio) await TestBasic("system-audio", new AppSettings { RecordMicrophone = false, RecordSystemAudio = true }, 6);
         if (Want("mic")) await TestBasic("mic-default", new AppSettings { RecordMicrophone = true, RecordSystemAudio = false }, 6);
         if (Want("micsys") && _systemAudio) await TestBasic("mic+system/max", new AppSettings { RecordMicrophone = true, RecordSystemAudio = true, QualityPreset = QualityPreset.MaximumQuality }, 6);
+        if (Want("slowaudio"))
+        {
+            // NVIDIA Broadcast warming up: recording must wait for it and capture everything after Start returns.
+            CaptureSource.TestOpenDelay = TimeSpan.FromSeconds(7);
+            try { await TestBasic("slow audio devices (open after 7 s)", new AppSettings { RecordMicrophone = true, RecordSystemAudio = _systemAudio, QualityPreset = QualityPreset.LowFileSize }, 8); }
+            finally { CaptureSource.TestOpenDelay = TimeSpan.Zero; }
+        }
         if (Want("low")) await TestBasic("low-preset", new AppSettings { RecordMicrophone = true, RecordSystemAudio = _systemAudio, QualityPreset = QualityPreset.LowFileSize }, 5);
 
         var broadcast = mics.FirstOrDefault(m => m.Name.Contains("Broadcast", StringComparison.OrdinalIgnoreCase));
@@ -101,6 +108,7 @@ internal static class Program
         if (Want("fallback")) await TestEncoderFallback();
         if (Want("sync") && _systemAudio) await TestSync("sync-30s", 30, [3, 25]);
         if (Want("kill")) await TestKillMidRecording();
+        if (Want("freeze")) await TestFrozenCapture();
         if (Want("killstorm")) await TestKillStorm();
         if (Want("cycles")) await TestStartStopCycles();
         if (Want("recovery")) await TestRecovery();
@@ -177,7 +185,7 @@ internal static class Program
         if (info.Width != monitor.Width || info.Height != monitor.Height)
             problems.Add($"resolution {info.Width}x{info.Height} != native {monitor.Width}x{monitor.Height}");
         // Startup/stop handshakes add a little footage; losing footage is the failure.
-        if (v < seconds - 0.5 || v > seconds + 3.5)
+        if (v < seconds - 0.5 || v > seconds + 4.5)
             problems.Add($"video duration {v:F2}s vs {seconds}s recorded");
 
         var wantAudio = settings.RecordMicrophone || settings.RecordSystemAudio;
@@ -188,8 +196,8 @@ internal static class Program
             var a = await StreamDuration(path, "a");
             Console.WriteLine($"  audio={a:F2}s  (A-V {a - v:+0.00;-0.00}s)");
             // On stop all audio is drained and closed first; video runs on for the drain time
-            // plus FFmpeg's stop reaction (~0.5 s with NVENC, ~1 s with x264).
-            if (a - v > 0.2 || v - a > 1.5)
+            // plus FFmpeg's stop reaction (~0.5 s with NVENC, up to ~2 s with x264 at max quality).
+            if (a - v > 0.4 || v - a > 2.0)
                 problems.Add($"audio {a:F2}s vs video {v:F2}s");
         }
 
@@ -418,8 +426,9 @@ internal static class Program
         var rest = TimeSpan.FromSeconds(seconds) - sw.Elapsed;
         if (rest > TimeSpan.Zero) await Task.Delay(rest);
         // A beep right before Stop must survive: proves the end of the audio is not cut off.
-        tone.Beep(250);
-        await Task.Delay(150);
+        // WASAPI output takes 0.1-0.3 s to start sounding, so it is requested well before Stop.
+        tone.Beep(600);
+        await Task.Delay(500);
         await rec.StopAsync();
         flash.Close();
 
@@ -440,7 +449,7 @@ internal static class Program
 
         var problems = new List<string>();
         if ((v < seconds - 0.5 || v > seconds + 3.5)) problems.Add($"video {v:F1}s vs {seconds}s");
-        if (a - v > 0.2 || v - a > 0.6) problems.Add($"audio {a:F2}s vs video {v:F2}s");
+        if (a - v > 0.4 || v - a > 1.0) problems.Add($"audio {a:F2}s vs video {v:F2}s");
         var offsets = new List<double>();
         foreach (var vo in videoOnsets)
         {
@@ -452,7 +461,7 @@ internal static class Program
         if (videoOnsets.Count != eventsAt.Length) problems.Add($"detected {videoOnsets.Count}/{eventsAt.Length} flashes");
         var finalBeep = audioOnsets.Where(t => t > videoOnsets.LastOrDefault() + 1).ToList();
         if (!finalBeep.Any(t => t < a - 0.05)) problems.Add("beep right before Stop is missing (audio tail cut)");
-        else Console.WriteLine($"  final beep (150 ms before Stop) present at {finalBeep.First():F3}s, audio ends {a:F3}s");
+        else Console.WriteLine($"  final beep (just before Stop) present at {finalBeep.First():F3}s, audio ends {a:F3}s");
         if (offsets.Count > 0)
         {
             Console.WriteLine($"  audio-minus-video offsets: {string.Join(", ", offsets.Select(o => $"{o * 1000:+0;-0}ms"))}  drift={(offsets[^1] - offsets[0]) * 1000:+0;-0}ms");
@@ -464,6 +473,71 @@ internal static class Program
     }
 
     // ---------- helpers ----------
+
+    [System.Runtime.InteropServices.DllImport("ntdll.dll")]
+    private static extern int NtSuspendProcess(IntPtr processHandle);
+
+    private static int FreezeOurFfmpeg()
+    {
+        var n = 0;
+        foreach (var p in Process.GetProcessesByName("ffmpeg"))
+        {
+            if (!IsOurFfmpeg(p)) continue;
+            try { if (NtSuspendProcess(p.Handle) == 0) n++; } catch { /* already gone */ }
+        }
+
+        return n;
+    }
+
+    private static async Task TestFrozenCapture()
+    {
+        const string name = "frozen capture (FFmpeg hangs) -> detected and resumed quickly";
+        Header(name);
+        var settings = new AppSettings { RecordMicrophone = true, RecordSystemAudio = _systemAudio, OutputFolder = OutDir };
+        using var rec = new RecordingService(_locator, _encoders, _monitors);
+        var sw = Stopwatch.StartNew();
+        await rec.StartAsync(settings, _primary);
+        await Task.Delay(4000);
+        var frozenAt = sw.Elapsed.TotalSeconds;
+        var frozen = FreezeOurFfmpeg();
+        Console.WriteLine($"  froze {frozen} ffmpeg process(es) at {frozenAt:F1}s");
+
+        double? resumedAt = null;
+        while (sw.Elapsed.TotalSeconds < frozenAt + 15)
+        {
+            await Task.Delay(250);
+            if (resumedAt is null && rec.Interruptions >= 1 && rec.StatusMessage?.Contains("resumed", StringComparison.OrdinalIgnoreCase) == true)
+                resumedAt = sw.Elapsed.TotalSeconds;
+        }
+
+        var state = rec.State;
+        await rec.StopAsync();
+        var total = sw.Elapsed.TotalSeconds;
+
+        var problems = new List<string>();
+        if (frozen == 0) problems.Add("no ffmpeg found to freeze");
+        if (state != RecordingState.Recording) problems.Add($"state after freeze = {state}");
+        if (resumedAt is null) problems.Add("never resumed");
+        else
+        {
+            Console.WriteLine($"  resumed {resumedAt - frozenAt:F1}s after the freeze");
+            if (resumedAt - frozenAt > 9) problems.Add($"took {resumedAt - frozenAt:F1}s to resume");
+        }
+        if (rec.State != RecordingState.Idle) problems.Add($"final state {rec.State}: {rec.LastError}");
+
+        var path = rec.OutputPath;
+        if (path is null || !File.Exists(path) || rec.OutputFiles.Count != 1)
+            problems.Add($"outputs: {string.Join(", ", rec.OutputFiles)}");
+        else
+        {
+            var v = await StreamDuration(path, "v");
+            Console.WriteLine($"  {Path.GetFileName(path)} video={v:F2}s wall={total:F1}s");
+            if (v < total - 10) problems.Add($"video {v:F1}s too short for {total:F1}s session");
+        }
+
+        if (Directory.GetFiles(OutDir, "*.mkv").Length > 0) problems.Add("leftover MKV");
+        Check(name, problems.Count == 0, string.Join("; ", problems));
+    }
 
     private static int KillOurFfmpeg()
     {

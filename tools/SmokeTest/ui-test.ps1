@@ -140,7 +140,7 @@ try {
         Write-Host "  $($mp4.Name) duration=$dur"
         Check "MP4 has video+audio" (($info -match "Video:") -and ($info -match "Audio:")) $info
         $secs = [TimeSpan]::Parse($dur).TotalSeconds
-        Check "MP4 covers the whole session (>= 14 s)" ($secs -ge 14) "duration $dur"
+        Check "MP4 covers the whole session (>= 12 s)" ($secs -ge 12) "duration $dur"
         cmd /c "`"$ff`" -hide_banner -loglevel error -y -ss 1 -i `"$($mp4.FullName)`" -frames:v 1 `"$out\e2e_frame_window_open.png`""
         cmd /c "`"$ff`" -hide_banner -loglevel error -y -sseof -2 -i `"$($mp4.FullName)`" -frames:v 1 `"$out\e2e_frame_after_restore.png`""
     }

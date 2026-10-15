@@ -20,7 +20,10 @@ public sealed class RecordingService : IDisposable
     private const long MinFreeBytesToStart = 1024L * 1024 * 1024;
     private const long MinFreeBytesWhileRecording = 400L * 1024 * 1024;
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(12);
-    private static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(20);
+    // gdigrab delivers ~30 frames/s; a few seconds without one means the capture or encoder froze.
+    private static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(5);
+    // NVIDIA Broadcast can take ~10 s to warm up; opening it while FFmpeg runs can freeze the video.
+    private static readonly TimeSpan AudioOpenTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan GracefulStopTimeout = TimeSpan.FromSeconds(20);
 
     private readonly FFmpegLocator _locator;
@@ -129,7 +132,7 @@ public sealed class RecordingService : IDisposable
             if (settings.RecordMicrophone || settings.RecordSystemAudio)
             {
                 session.Audio = new AudioCapturePipeline();
-                await session.Audio.StartAsync(settings, TimeSpan.FromSeconds(5));
+                await session.Audio.StartAsync(settings, AudioOpenTimeout);
             }
 
             SessionStore.Save(session.Manifest);
@@ -1002,8 +1005,7 @@ public sealed class RecordingService : IDisposable
                     else if (key == "out_time_us" && long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var us) && us > 0)
                     {
                         OutTimeSeconds = us / 1_000_000.0;
-                    }
-                }
+                    }                }
             }
             catch
             {

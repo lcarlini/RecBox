@@ -291,6 +291,7 @@ public sealed class AudioCapturePipeline : IDisposable
     {
         private const int ChunkFrames = SampleRate / 100; // 10 ms
         private const int MaxChunksPerWrite = 10;
+        private static readonly TimeSpan DrainTail = TimeSpan.FromMilliseconds(200);
 
         private readonly string _name;
         private readonly AudioCapturePipeline _owner;
@@ -304,15 +305,18 @@ public sealed class AudioCapturePipeline : IDisposable
         private TimeSpan _sinceEpochAtConnect;
         private Stopwatch? _clock;
 
-        /// <summary>Stops the clock at "now", waits until everything up to it is written, then the loop exits.</summary>
+        /// <summary>
+        /// Writes until shortly after "now" (sound played just before Stop is still in flight through
+        /// WASAPI and the jitter buffer), then the loop exits.
+        /// </summary>
         public void Drain(TimeSpan timeout)
         {
             if (!_connected || _clock is null)
                 return;
 
-            var target = (long)((_sinceEpochAtConnect + _clock.Elapsed).TotalSeconds * SampleRate);
+            var target = (long)((_sinceEpochAtConnect + _clock.Elapsed + DrainTail).TotalSeconds * SampleRate);
             Interlocked.Exchange(ref _drainTargetFrames, target);
-            var behindMs = (target - Interlocked.Read(ref _framesWritten)) * 1000 / SampleRate;
+            var behindMs = (target - Interlocked.Read(ref _framesWritten)) * 1000 / SampleRate - (long)DrainTail.TotalMilliseconds;
             if (!(_thread?.Join(timeout) ?? true))
                 AppLog.Warn($"Audio drain timed out ({behindMs} ms were pending).");
             else if (behindMs > 100)
@@ -392,8 +396,7 @@ public sealed class AudioCapturePipeline : IDisposable
                     {
                         if (drainTarget != long.MaxValue)
                         {
-                            _pipe.Flush();
-                            break; // drained: closing the pipe gives FFmpeg a clean EOF
+                            _pipe.Flush();                            break; // drained: closing the pipe gives FFmpeg a clean EOF
                         }
 
                         Thread.Sleep(2);
@@ -418,8 +421,7 @@ public sealed class AudioCapturePipeline : IDisposable
 
                     _pipe.WriteAsync(bytes.AsMemory(0, samples * 2), token).AsTask().GetAwaiter().GetResult();
                     framesWritten += frames;
-                    Interlocked.Exchange(ref _framesWritten, framesWritten);
-                }
+                    Interlocked.Exchange(ref _framesWritten, framesWritten);                }
                 catch (OperationCanceledException)
                 {
                     break;
@@ -501,8 +503,13 @@ internal sealed class CaptureSource : IDisposable
     /// <summary>Times excess latency was trimmed (device clock faster than system clock).</summary>
     public int Trims { get; private set; }
 
+    /// <summary>Test hook: simulates a device that is slow to open (e.g. NVIDIA Broadcast starting up).</summary>
+    internal static TimeSpan TestOpenDelay { get; set; }
+
     public void Open()
     {
+        if (TestOpenDelay > TimeSpan.Zero)
+            Thread.Sleep(TestOpenDelay);
         var capture = _factory();
         try
         {

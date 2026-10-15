@@ -12,7 +12,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <RootNamespace>RecBox</RootNamespace>
     <AssemblyName>RecBox</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Product>RecBox</Product>
     <Description>Lightweight Windows screen recorder</Description>
   </PropertyGroup>
@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <Content Include="Assets\recbox.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\recbox-recording.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\recbox.png" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\recbox.png')" />
   </ItemGroup>
 

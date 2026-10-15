@@ -20,7 +20,7 @@ Settings live in `%AppData%\RecBox` and are **kept across upgrades and reinstall
 
 ```powershell
 # From a downloaded release zip in the current folder:
-powershell -ExecutionPolicy Bypass -File .\Install-RecBox.ps1 -FromZip .\RecBox-1.0.0-win-x64.zip -DesktopShortcut -Launch
+powershell -ExecutionPolicy Bypass -File .\Install-RecBox.ps1 -FromZip .\RecBox-1.1.0-win-x64.zip -DesktopShortcut -Launch
 
 # Or install/update from the latest GitHub Release automatically:
 powershell -ExecutionPolicy Bypass -File .\Install-RecBox.ps1 -FromGitHub -DesktopShortcut -Launch
