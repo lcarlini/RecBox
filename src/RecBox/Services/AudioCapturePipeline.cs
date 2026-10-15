@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
@@ -47,34 +48,65 @@ public sealed class AudioCapturePipeline : IDisposable
 
         if (settings.RecordMicrophone)
         {
-            _micDevice = ResolveCaptureDevice(settings.MicrophoneId);
-            _micCapture = _micDevice is null
-                ? new WasapiCapture()
-                : new WasapiCapture(_micDevice);
-
-            _micBuffer = new BufferedWaveProvider(_micCapture.WaveFormat)
+            try
             {
-                DiscardOnBufferOverflow = true,
-                BufferDuration = TimeSpan.FromSeconds(3)
-            };
+                _micDevice = ResolveCaptureDevice(settings.MicrophoneId);
+                _micCapture = _micDevice is null
+                    ? new WasapiCapture()
+                    : new WasapiCapture(_micDevice);
 
-            _micCapture.DataAvailable += (_, e) => _micBuffer.AddSamples(e.Buffer, 0, e.BytesRecorded);
-            inputs.Add(CreateResampledProvider(_micBuffer));
-            _micCapture.StartRecording();
+                _micBuffer = new BufferedWaveProvider(_micCapture.WaveFormat)
+                {
+                    DiscardOnBufferOverflow = true,
+                    BufferDuration = TimeSpan.FromSeconds(3)
+                };
+
+                _micCapture.DataAvailable += (_, e) => _micBuffer.AddSamples(e.Buffer, 0, e.BytesRecorded);
+                inputs.Add(CreateResampledProvider(_micBuffer));
+                _micCapture.StartRecording();
+            }
+            catch (Exception ex)
+            {
+                DisposeCapture();
+                throw new InvalidOperationException(
+                    $"Microphone capture failed ({ex.Message}). Try another microphone or the Default device.",
+                    ex);
+            }
         }
 
         if (settings.RecordSystemAudio)
         {
-            _loopbackCapture = new WasapiLoopbackCapture();
-            _loopBuffer = new BufferedWaveProvider(_loopbackCapture.WaveFormat)
+            try
             {
-                DiscardOnBufferOverflow = true,
-                BufferDuration = TimeSpan.FromSeconds(3)
-            };
+                using var enumerator = new MMDeviceEnumerator();
+                // Ensure a render endpoint exists before opening loopback
+                _ = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
 
-            _loopbackCapture.DataAvailable += (_, e) => _loopBuffer.AddSamples(e.Buffer, 0, e.BytesRecorded);
-            inputs.Add(CreateResampledProvider(_loopBuffer));
-            _loopbackCapture.StartRecording();
+                _loopbackCapture = new WasapiLoopbackCapture();
+                _loopBuffer = new BufferedWaveProvider(_loopbackCapture.WaveFormat)
+                {
+                    DiscardOnBufferOverflow = true,
+                    BufferDuration = TimeSpan.FromSeconds(3)
+                };
+
+                _loopbackCapture.DataAvailable += (_, e) => _loopBuffer.AddSamples(e.Buffer, 0, e.BytesRecorded);
+                inputs.Add(CreateResampledProvider(_loopBuffer));
+                _loopbackCapture.StartRecording();
+            }
+            catch (COMException ex)
+            {
+                DisposeCapture();
+                throw new InvalidOperationException(
+                    "System audio loopback failed. Ensure a playback device is set as default in Windows Sound settings.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                DisposeCapture();
+                throw new InvalidOperationException(
+                    $"System audio capture failed ({ex.Message}). Ensure a default playback device is available.",
+                    ex);
+            }
         }
 
         var mixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(SampleRate, Channels))

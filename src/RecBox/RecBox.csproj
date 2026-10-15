@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <Content Include="Assets\recbox.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\recbox.png" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\recbox.png')" />
   </ItemGroup>
 
 </Project>

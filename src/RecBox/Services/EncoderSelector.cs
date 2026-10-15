@@ -119,7 +119,7 @@ public sealed class EncoderSelector
 
     private static List<string> GetNvencArgs(QualityPreset preset)
     {
-        // CQ: lower = higher quality
+        // CQ: lower = higher quality. Prefer -cq (works across recent NVENC builds).
         var (cq, presetName) = preset switch
         {
             QualityPreset.LowFileSize => (32, "p4"),
@@ -131,8 +131,9 @@ public sealed class EncoderSelector
         [
             "-c:v", "h264_nvenc",
             "-preset", presetName,
-            "-rc", "constqp",
-            "-qp", cq.ToString(),
+            "-rc", "vbr",
+            "-cq", cq.ToString(),
+            "-b:v", "0",
             "-pix_fmt", "yuv420p"
         ];
     }

@@ -5,29 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>RecBox — Simple Windows Screen Recorder</title>
   <meta name="description" content="RecBox is a lightweight Windows-only screen recorder. Capture one monitor at native resolution with optional microphone and system audio. No streaming, no editing, no clutter." />
+  <link rel="icon" href="assets/recbox.ico" />
   <style>
     :root {
-      --bg: #0e1016;
-      --card: #171a22;
-      --border: #2a3040;
-      --text: #f2f4f8;
-      --muted: #9aa3b5;
-      --accent: #5b8cff;
-      --accent-dim: #3d64c7;
+      --bg: #0b0e12;
+      --card: #171c25;
+      --border: #2a3342;
+      --text: #f4f7fb;
+      --muted: #8b96a8;
+      --accent: #2dd4bf;
+      --accent-dim: #1a9e8f;
       --success: #3ddc97;
-      --danger: #ff5c7a;
-      --radius: 14px;
-      --max: 880px;
+      --danger: #ff4d5e;
+      --radius: 16px;
+      --max: 900px;
     }
 
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-      background: radial-gradient(1200px 600px at 10% -10%, #1a2744 0%, transparent 55%),
-                  radial-gradient(900px 500px at 100% 0%, #1e1630 0%, transparent 50%),
-                  var(--bg);
+      font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      background:
+        radial-gradient(900px 480px at 8% -8%, rgba(45, 212, 191, 0.18) 0%, transparent 55%),
+        radial-gradient(700px 420px at 100% 0%, rgba(255, 77, 94, 0.12) 0%, transparent 50%),
+        var(--bg);
       color: var(--text);
       line-height: 1.6;
     }
@@ -52,47 +54,43 @@
       letter-spacing: -0.02em;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
-
-    .logo-mark {
-      width: 28px; height: 28px; border-radius: 50%;
-      background: var(--accent);
-      display: grid; place-items: center;
-      box-shadow: 0 0 0 4px rgba(91, 140, 255, 0.15);
-    }
-    .logo-mark span {
-      width: 10px; height: 10px; border-radius: 50%;
-      background: var(--danger);
+    .logo img {
+      width: 36px; height: 36px; border-radius: 10px;
+      box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.15);
     }
 
     nav { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.95rem; }
     nav a { color: var(--muted); }
     nav a:hover { color: var(--text); text-decoration: none; }
 
-    .hero {
-      padding: 48px 0 36px;
-    }
+    .hero { padding: 52px 0 40px; }
     .hero h1 {
-      font-size: clamp(2rem, 5vw, 2.8rem);
-      line-height: 1.15;
-      letter-spacing: -0.03em;
+      font-size: clamp(2.1rem, 5vw, 3rem);
+      line-height: 1.12;
+      letter-spacing: -0.035em;
       margin: 0 0 16px;
+      max-width: 16ch;
     }
     .hero p.lead {
       font-size: 1.15rem;
       color: var(--muted);
-      max-width: 40rem;
-      margin: 0 0 24px;
+      max-width: 38rem;
+      margin: 0 0 28px;
     }
     .actions { display: flex; gap: 12px; flex-wrap: wrap; }
     .btn {
       display: inline-flex; align-items: center; justify-content: center;
-      padding: 12px 18px; border-radius: 10px; font-weight: 600;
+      padding: 13px 20px; border-radius: 12px; font-weight: 600;
       border: 1px solid transparent; text-decoration: none;
     }
-    .btn:hover { text-decoration: none; filter: brightness(1.05); }
-    .btn-primary { background: var(--accent); color: white; }
+    .btn:hover { text-decoration: none; filter: brightness(1.06); }
+    .btn-primary {
+      background: linear-gradient(135deg, #3ee8d2, #1fb5a3);
+      color: #06201c;
+      box-shadow: 0 0 28px rgba(45, 212, 191, 0.28);
+    }
     .btn-secondary { background: transparent; color: var(--text); border-color: var(--border); }
 
     section { padding: 36px 0; }
@@ -101,10 +99,7 @@
       margin: 0 0 16px;
       letter-spacing: -0.02em;
     }
-    section h3 {
-      font-size: 1.1rem;
-      margin: 24px 0 8px;
-    }
+    section h3 { font-size: 1.1rem; margin: 24px 0 8px; }
 
     .grid {
       display: grid;
@@ -112,7 +107,7 @@
       gap: 14px;
     }
     .card {
-      background: var(--card);
+      background: linear-gradient(160deg, rgba(23,28,37,0.95), rgba(14,18,24,0.9));
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 18px;
@@ -142,15 +137,15 @@
       width: 28px; height: 28px;
       border-radius: 50%;
       background: var(--accent-dim);
-      color: white;
+      color: #06201c;
       display: grid; place-items: center;
       font-weight: 700; font-size: 0.9rem;
     }
     .steps li strong { color: var(--text); }
 
     .callout {
-      background: rgba(91, 140, 255, 0.08);
-      border: 1px solid rgba(91, 140, 255, 0.25);
+      background: rgba(45, 212, 191, 0.08);
+      border: 1px solid rgba(45, 212, 191, 0.28);
       border-radius: var(--radius);
       padding: 14px 16px;
       color: var(--muted);
@@ -160,15 +155,11 @@
     details {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 12px 16px;
       margin: 8px 0;
     }
-    details summary {
-      cursor: pointer;
-      font-weight: 600;
-      color: var(--text);
-    }
+    details summary { cursor: pointer; font-weight: 600; color: var(--text); }
     details p { color: var(--muted); margin: 10px 0 4px; }
 
     footer {
@@ -186,15 +177,15 @@
       border-radius: 6px;
       padding: 0.1em 0.4em;
       font-size: 0.9em;
-      color: #d7e0ff;
+      color: #b7f5ec;
     }
     pre {
       background: #0b0d12;
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 14px 16px;
       overflow-x: auto;
-      color: #d7e0ff;
+      color: #b7f5ec;
       font-size: 0.9rem;
     }
   </style>
@@ -203,12 +194,11 @@
   <div class="wrap">
     <header>
       <div class="logo">
-        <div class="logo-mark" aria-hidden="true"><span></span></div>
+        <img src="assets/recbox.png" width="36" height="36" alt="RecBox icon" />
         RecBox
       </div>
       <nav>
         <a href="#features">Features</a>
-        <a href="#requirements">Requirements</a>
         <a href="#install">Install</a>
         <a href="#guide">Guide</a>
         <a href="#tray">Tray</a>
@@ -217,14 +207,14 @@
     </header>
 
     <section class="hero" id="top">
-      <h1>Screen recording for Windows — without the OBS complexity.</h1>
+      <h1>RecBox</h1>
       <p class="lead">
-        RecBox is a lightweight, Windows-only screen recorder focused on one job:
-        capture a monitor at native resolution, with optional microphone and system audio,
-        then get out of the way. No streaming. No scenes. No filters.
+        Screen recording for Windows — without the OBS complexity.
+        Capture a monitor at native resolution, with optional mic and system audio.
+        No streaming. No scenes. No clutter.
       </p>
       <div class="actions">
-        <a class="btn btn-primary" href="#install">Get started</a>
+        <a class="btn btn-primary" href="#install">Install in one command</a>
         <a class="btn btn-secondary" href="#guide">How to record</a>
       </div>
     </section>
@@ -234,100 +224,77 @@
       <div class="grid">
         <div class="card">
           <h3>Minimize to tray</h3>
-          <p>Hide RecBox from the taskbar while recording so the app itself never appears in your video — just like OBS.</p>
+          <p>Hide from the taskbar while recording so RecBox never appears in your video.</p>
         </div>
         <div class="card">
           <h3>Native monitor capture</h3>
-          <p>Pick any display. Recordings use that monitor’s native resolution with no unnecessary scaling.</p>
+          <p>Pick any display. Output matches that monitor’s real resolution — no scaling.</p>
         </div>
         <div class="card">
           <h3>Mic + system audio</h3>
-          <p>Enable microphone and computer audio independently. NVIDIA Broadcast shows up as a normal mic when installed.</p>
+          <p>Toggle each independently. NVIDIA Broadcast shows up as a normal mic when installed.</p>
         </div>
         <div class="card">
           <h3>Simple quality presets</h3>
-          <p>Choose Low file size, Balanced, or Maximum quality. RecBox picks hardware encoding when available.</p>
+          <p>Low file size, Balanced, or Maximum quality — with hardware encode when available.</p>
         </div>
         <div class="card">
-          <h3>Video only</h3>
-          <p>No streaming, editing, or plugin maze — just reliable MP4 recordings you can share or edit elsewhere.</p>
+          <h3>Modern desktop UI</h3>
+          <p>Clean dark interface with a one-click record control. Settings save automatically.</p>
         </div>
         <div class="card">
-          <h3>Lightweight stack</h3>
-          <p>Native Windows UI with FFmpeg for capture/encode and Windows WASAPI for reliable audio.</p>
+          <h3>Easy to run</h3>
+          <p>One PowerShell script downloads FFmpeg, builds, and launches. Or publish a portable folder.</p>
         </div>
       </div>
-    </section>
-
-    <section id="requirements">
-      <h2>System requirements</h2>
-      <ul>
-        <li><strong>OS:</strong> Windows 10 or Windows 11 (64-bit)</li>
-        <li><strong>.NET:</strong> .NET 8 Desktop Runtime (included if you publish self-contained)</li>
-        <li><strong>FFmpeg:</strong> <code>ffmpeg.exe</code> placed in <code>tools/ffmpeg</code> or available on your PATH (used for video capture/encoding)</li>
-        <li><strong>Optional:</strong> NVIDIA, AMD, or Intel GPU for hardware-accelerated H.264 encoding</li>
-        <li><strong>Optional:</strong> NVIDIA Broadcast (appears as a microphone input device)</li>
-      </ul>
     </section>
 
     <section id="install">
-      <h2>Installation</h2>
-      <h3>From source (developers)</h3>
-      <ol>
-        <li>Install the <a href="https://dotnet.microsoft.com/download/dotnet/8.0">.NET 8 SDK</a>.</li>
-        <li>Clone or download this repository.</li>
-        <li>Download FFmpeg into <code>tools/ffmpeg</code>:</li>
-      </ol>
-      <pre>powershell -ExecutionPolicy Bypass -File tools/download-ffmpeg.ps1</pre>
-      <ol start="4">
-        <li>Build and run:</li>
-      </ol>
-      <pre>dotnet build RecBox.slnx -c Release
-dotnet run --project src/RecBox/RecBox.csproj -c Release</pre>
+      <h2>Install &amp; run</h2>
+
+      <h3>Fastest — one command</h3>
+      <p style="color:var(--muted)">Install the <a href="https://dotnet.microsoft.com/download/dotnet/8.0">.NET 8 SDK</a>, clone the repo, then:</p>
+      <pre>powershell -ExecutionPolicy Bypass -File .\run.ps1</pre>
       <div class="callout">
-        You can also drop any recent Windows <code>ffmpeg.exe</code> into <code>tools/ffmpeg</code> manually.
-        See <code>tools/ffmpeg/README.md</code> for details.
+        <code>run.ps1</code> downloads FFmpeg if needed, builds RecBox, and opens the app.
       </div>
 
-      <h3>First launch</h3>
+      <h3>Portable build (share as a zip)</h3>
+      <pre>powershell -ExecutionPolicy Bypass -File .\publish.ps1</pre>
+      <p style="color:var(--muted)">Creates <code>dist\RecBox\RecBox.exe</code> with FFmpeg included. Zip that folder — recipients double-click to run, no SDK required.</p>
+
+      <h3>Requirements</h3>
       <ul>
-        <li>RecBox opens a single settings window — pick your monitor, audio options, and quality.</li>
-        <li>Recordings are saved under <code>Videos\RecBox</code> by default (changeable in Settings).</li>
-        <li>Settings persist in <code>%AppData%\RecBox\settings.json</code>.</li>
+        <li><strong>OS:</strong> Windows 10 or 11 (64-bit)</li>
+        <li><strong>To build:</strong> .NET 8 SDK</li>
+        <li><strong>Portable publish:</strong> no SDK on the target PC</li>
+        <li><strong>Optional:</strong> NVIDIA / AMD / Intel GPU for hardware encoding; NVIDIA Broadcast for filtered mic input</li>
       </ul>
     </section>
 
     <section id="guide">
-      <h2>How to record — step by step</h2>
+      <h2>How to record</h2>
       <ol class="steps">
-        <li><strong>Choose a monitor.</strong> In Settings, open the Monitor list and select the display you want to capture. The resolution shown is the native size that will be recorded.</li>
-        <li><strong>Select a microphone (optional).</strong> Turn on <em>Record microphone</em> and pick Default Windows microphone, a specific device, or NVIDIA Broadcast if installed.</li>
-        <li><strong>Enable system audio (optional).</strong> Turn on <em>Record system audio</em> to capture what your computer plays (games, browsers, meetings). This is independent from the microphone.</li>
-        <li><strong>Pick a quality preset.</strong>
-          <ul>
-            <li><strong>Low file size</strong> — smaller files, still watchable</li>
-            <li><strong>Balanced</strong> — everyday default</li>
-            <li><strong>Maximum quality</strong> — best looking, largest files</li>
-          </ul>
-        </li>
-        <li><strong>Set the output folder</strong> if you do not want the default <code>Videos\RecBox</code> location.</li>
-        <li><strong>Click Start recording.</strong> The timer starts. When finished, click Stop recording (or use the tray menu).</li>
-        <li><strong>Open folder</strong> to jump to your new MP4 file.</li>
+        <li><strong>Choose a monitor</strong> — native resolution is shown in the list.</li>
+        <li><strong>Microphone (optional)</strong> — Default, a specific device, or NVIDIA Broadcast.</li>
+        <li><strong>System audio (optional)</strong> — capture what your PC plays; independent from the mic.</li>
+        <li><strong>Quality</strong> — Low file size, Balanced, or Maximum quality.</li>
+        <li><strong>Press Start</strong> — the big teal control. Timer begins.</li>
+        <li><strong>Hide to tray</strong> — minimize or close so RecBox leaves the taskbar.</li>
+        <li><strong>Stop</strong> from the app or tray menu. Open folder to find your MP4.</li>
       </ol>
     </section>
 
     <section id="tray">
-      <h2>Minimize to the system tray</h2>
+      <h2>System tray</h2>
       <p style="color:var(--muted)">
-        While recording, you usually do not want RecBox visible in the capture.
-        Minimize the window (or click the window close button) to send RecBox to the
-        <strong style="color:var(--text)">system tray</strong> next to the clock.
-        It disappears from the taskbar but keeps recording in the background.
+        Minimize or close the window to send RecBox to the tray (next to the clock).
+        Recording continues in the background without appearing in the capture.
       </p>
       <ul>
-        <li><strong>Double-click</strong> the tray icon to show the window again.</li>
-        <li><strong>Right-click</strong> the tray icon for Show, Start/Stop recording, or Exit.</li>
-        <li>Use <strong>Exit</strong> in the tray menu when you want to fully quit RecBox.</li>
+        <li><strong>Double-click</strong> the tray icon to restore the window.</li>
+        <li><strong>Right-click</strong> for Show, Start/Stop, or Exit.</li>
+        <li>Use <strong>Exit</strong> when you want to quit completely.</li>
       </ul>
     </section>
 
@@ -336,37 +303,28 @@ dotnet run --project src/RecBox/RecBox.csproj -c Release</pre>
 
       <details>
         <summary>FFmpeg was not found</summary>
-        <p>Place <code>ffmpeg.exe</code> in <code>tools/ffmpeg</code>, run <code>tools/download-ffmpeg.ps1</code>, or add FFmpeg to your system PATH. Restart RecBox afterward.</p>
+        <p>Run <code>run.ps1</code> or <code>tools/download-ffmpeg.ps1</code>, or place <code>ffmpeg.exe</code> in <code>tools/ffmpeg</code>.</p>
       </details>
-
       <details>
         <summary>No microphone / NVIDIA Broadcast missing</summary>
-        <p>Confirm the device works in Windows Sound settings. Broadcast only appears after NVIDIA Broadcast is installed and its virtual microphone is enabled. Refresh by restarting RecBox.</p>
+        <p>Check Windows Sound settings. Install/enable NVIDIA Broadcast, then restart RecBox.</p>
       </details>
-
       <details>
-        <summary>System audio is silent</summary>
-        <p>Ensure <em>Record system audio</em> is checked and that sound is playing through your default playback device. RecBox uses Windows WASAPI loopback, so no Stereo Mix or virtual cable is required. Some exclusive-mode apps can still block loopback — try shared mode or set another output as default.</p>
+        <summary>System audio silent or disabled</summary>
+        <p>You need an active playback device (speakers/headphones) set as default. RecBox uses WASAPI loopback — no virtual cable needed.</p>
       </details>
-
       <details>
-        <summary>Black screen when capturing a game or protected window</summary>
-        <p>Some fullscreen exclusive games and DRM-protected content block desktop capture. Try borderless windowed mode. Capturing elevated (Administrator) windows may require running RecBox as Administrator too.</p>
+        <summary>Black screen in games</summary>
+        <p>Try borderless windowed mode. Elevated windows may need RecBox run as Administrator.</p>
       </details>
-
-      <details>
-        <summary>Recording failed to start / encoder errors</summary>
-        <p>RecBox prefers hardware encoders (NVENC → Quick Sync → AMF) and falls back to software x264. Update GPU drivers, or switch to the Balanced / Low preset. RecBox also falls back from GPU desktop capture to a compatibility mode automatically when needed.</p>
-      </details>
-
       <details>
         <summary>Where are my files?</summary>
-        <p>By default: <code>%UserProfile%\Videos\RecBox</code>. Use <em>Open folder</em> in the app, or check the path shown under the timer after you stop.</p>
+        <p>Default: <code>%UserProfile%\Videos\RecBox</code>. Use <em>Open folder</em> in the app.</p>
       </details>
     </section>
 
     <footer>
-      <p><strong style="color:var(--text)">RecBox</strong> — a streamlined Windows screen recorder. Built for people who want OBS-quality capture without the control-room UI.</p>
+      <p><strong style="color:var(--text)">RecBox</strong> — a streamlined Windows screen recorder.</p>
       <p style="margin-top:8px">Video only. No streaming. No editors. Just hit record.</p>
     </footer>
   </div>

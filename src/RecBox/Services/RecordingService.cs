@@ -17,6 +17,7 @@ public sealed class RecordingService : IDisposable
     private CancellationTokenSource? _stderrCts;
     private DateTime _startedAt;
     private bool _useDdagrab = true;
+    private string? _lastArgs;
 
     public RecordingService(
         FFmpegLocator locator,
@@ -29,6 +30,7 @@ public sealed class RecordingService : IDisposable
     public RecordingState State { get; private set; } = RecordingState.Idle;
     public string? OutputPath { get; private set; }
     public string? LastError { get; private set; }
+    public string? LastArguments => _lastArgs;
     public string EncoderDisplayName => _encoderSelector.Selected.DisplayName;
 
     public TimeSpan Elapsed =>
@@ -65,58 +67,79 @@ public sealed class RecordingService : IDisposable
         LastError = null;
         var wantAudio = settings.RecordMicrophone || settings.RecordSystemAudio;
 
-        try
+        // Start audio once (not part of GPU/GDI fallback).
+        string? pipePath = null;
+        if (wantAudio)
         {
-            await StartWithCaptureModeAsync(ffmpeg, settings, monitor, outputPath, wantAudio, useDdagrab: _useDdagrab);
-        }
-        catch (Exception) when (_useDdagrab)
-        {
-            CleanupAudio();
-            _useDdagrab = false;
-            try { await StopInternalAsync(force: true); } catch { /* ignore */ }
-
             try
             {
-                await StartWithCaptureModeAsync(ffmpeg, settings, monitor, outputPath, wantAudio, useDdagrab: false);
+                pipePath = StartAudioPipeline(settings);
             }
-            catch (Exception fallbackEx)
+            catch (Exception ex)
             {
                 CleanupAudio();
-                SetError($"Failed to start recording: {fallbackEx.Message}");
+                SetError(ex.Message);
                 throw;
             }
+        }
+
+        Exception? firstFailure = null;
+        var tryDdagrab = _useDdagrab && _encoderSelector.SupportsDdagrab;
+
+        if (tryDdagrab)
+        {
+            try
+            {
+                await StartProcessAsync(ffmpeg, BuildArguments(monitor, outputPath, useDdagrab: true, pipePath, settings.QualityPreset), outputPath);
+                return;
+            }
+            catch (Exception ex)
+            {
+                firstFailure = ex;
+                // Kill only FFmpeg; keep the audio pipe for the GDI fallback attempt.
+                await AbortFfmpegOnlyAsync();
+            }
+        }
+
+        try
+        {
+            await StartProcessAsync(ffmpeg, BuildArguments(monitor, outputPath, useDdagrab: false, pipePath, settings.QualityPreset), outputPath);
+            _useDdagrab = false;
+        }
+        catch (Exception fallbackEx)
+        {
+            CleanupAudio();
+            var detail = firstFailure is null
+                ? fallbackEx.Message
+                : $"{fallbackEx.Message} (GPU capture also failed: {Truncate(firstFailure.Message, 200)})";
+            SetError($"Failed to start recording: {detail}");
+            throw new InvalidOperationException(LastError, fallbackEx);
+        }
+    }
+
+    private string StartAudioPipeline(AppSettings settings)
+    {
+        var pipeName = $"RecBoxAudio_{Environment.ProcessId}_{Guid.NewGuid():N}";
+        _audioPipeline = new AudioCapturePipeline(pipeName);
+        try
+        {
+            _audioPipeline.Start(settings);
         }
         catch (Exception ex)
         {
             CleanupAudio();
-            SetError($"Failed to start recording: {ex.Message}");
-            throw;
-        }
-    }
-
-    private async Task StartWithCaptureModeAsync(
-        string ffmpeg,
-        AppSettings settings,
-        MonitorInfo monitor,
-        string outputPath,
-        bool wantAudio,
-        bool useDdagrab)
-    {
-        string? pipePath = null;
-        if (wantAudio)
-        {
-            var pipeName = $"RecBoxAudio_{Environment.ProcessId}_{Guid.NewGuid():N}";
-            _audioPipeline = new AudioCapturePipeline(pipeName);
-            _audioPipeline.Start(settings);
-            pipePath = _audioPipeline.PipePath;
+            throw new InvalidOperationException(
+                $"Could not start audio capture: {ex.Message}",
+                ex);
         }
 
-        var args = BuildArguments(settings, monitor, outputPath, useDdagrab, pipePath);
-        await StartProcessAsync(ffmpeg, args, outputPath);
+        return _audioPipeline.PipePath;
     }
 
     private async Task StartProcessAsync(string ffmpeg, string arguments, string outputPath)
     {
+        _lastArgs = arguments;
+
         var psi = new ProcessStartInfo
         {
             FileName = ffmpeg,
@@ -139,14 +162,17 @@ public sealed class RecordingService : IDisposable
         _ = DrainStreamAsync(process.StandardOutput, _stderrCts.Token);
         _ = DrainStreamAsync(process.StandardError, _stderrCts.Token);
 
-        await Task.Delay(900);
+        await Task.Delay(1200);
         if (process.HasExited)
         {
             var err = _stderr.ToString().Trim();
             var message = string.IsNullOrWhiteSpace(err)
                 ? $"FFmpeg exited immediately (code {process.ExitCode})."
                 : Truncate(err, 800);
-            process.Dispose();
+            try { process.Dispose(); } catch { /* ignore */ }
+            _stderrCts?.Cancel();
+            _stderrCts?.Dispose();
+            _stderrCts = null;
             throw new InvalidOperationException(message);
         }
 
@@ -169,6 +195,34 @@ public sealed class RecordingService : IDisposable
 
         SetState(RecordingState.Stopping);
         await StopInternalAsync(force: false);
+    }
+
+    private async Task AbortFfmpegOnlyAsync()
+    {
+        Process? process;
+        lock (_sync)
+        {
+            process = _process;
+            _process = null;
+        }
+
+        if (process is null)
+            return;
+
+        try
+        {
+            try { process.Exited -= OnProcessExited; } catch { /* ignore */ }
+            if (!process.HasExited)
+            {
+                try { process.Kill(entireProcessTree: true); } catch { /* ignore */ }
+                await WaitForExitAsync(process, TimeSpan.FromSeconds(3));
+            }
+        }
+        finally
+        {
+            try { process.Dispose(); } catch { /* ignore */ }
+            State = RecordingState.Idle;
+        }
     }
 
     private async Task StopInternalAsync(bool force)
@@ -265,47 +319,52 @@ public sealed class RecordingService : IDisposable
     }
 
     private string BuildArguments(
-        AppSettings settings,
         MonitorInfo monitor,
         string outputPath,
         bool useDdagrab,
-        string? audioPipePath)
+        string? audioPipePath,
+        QualityPreset preset)
     {
         var parts = new List<string> { "-y", "-hide_banner", "-loglevel", "error", "-stats" };
         var hasAudio = !string.IsNullOrEmpty(audioPipePath);
 
-        if (hasAudio)
-        {
-            parts.AddRange([
-                "-f", "s16le",
-                "-ar", AudioCapturePipeline.SampleRate.ToString(),
-                "-ac", AudioCapturePipeline.Channels.ToString(),
-                "-thread_queue_size", "1024",
-                "-i", Quote(audioPipePath!)
-            ]);
-        }
-
         if (useDdagrab)
         {
-            var needsHwDownload =
-                _encoderSelector.Selected.Kind is not (VideoEncoderKind.Nvenc or VideoEncoderKind.Qsv);
+            var videoFilter =
+                $"ddagrab=output_idx={monitor.Index}:framerate=60:draw_mouse=1,hwdownload,format=bgra[v]";
 
-            var videoFilter = needsHwDownload
-                ? $"ddagrab=output_idx={monitor.Index}:framerate=60:draw_mouse=1,hwdownload,format=bgra[v]"
-                : $"ddagrab=output_idx={monitor.Index}:framerate=60:draw_mouse=1[v]";
+            if (hasAudio)
+            {
+                parts.AddRange([
+                    "-f", "s16le",
+                    "-ar", AudioCapturePipeline.SampleRate.ToString(),
+                    "-ac", AudioCapturePipeline.Channels.ToString(),
+                    "-i", audioPipePath!
+                ]);
+            }
 
             parts.AddRange([
-                "-filter_complex", Quote(videoFilter),
-                "-map", Quote("[v]")
+                "-filter_complex", videoFilter,
+                "-map", "[v]"
             ]);
 
             if (hasAudio)
-                parts.AddRange(["-map", "0:a", "-c:a", "aac", "-b:a", "192k"]);
+                parts.AddRange(["-map", "0:a", "-c:a", "aac", "-b:a", "192k", "-async", "1"]);
             else
                 parts.Add("-an");
         }
         else
         {
+            if (hasAudio)
+            {
+                parts.AddRange([
+                    "-f", "s16le",
+                    "-ar", AudioCapturePipeline.SampleRate.ToString(),
+                    "-ac", AudioCapturePipeline.Channels.ToString(),
+                    "-i", audioPipePath!
+                ]);
+            }
+
             parts.AddRange([
                 "-f", "gdigrab",
                 "-framerate", "60",
@@ -313,37 +372,46 @@ public sealed class RecordingService : IDisposable
                 "-offset_y", monitor.BoundsY.ToString(),
                 "-video_size", $"{monitor.Width}x{monitor.Height}",
                 "-draw_mouse", "1",
-                "-thread_queue_size", "1024",
                 "-i", "desktop"
             ]);
 
-            // Inputs: [0]=audio pipe (optional), [last]=gdigrab video
             var videoIndex = hasAudio ? 1 : 0;
             parts.AddRange(["-map", $"{videoIndex}:v"]);
 
             if (hasAudio)
-                parts.AddRange(["-map", "0:a", "-c:a", "aac", "-b:a", "192k"]);
+                parts.AddRange(["-map", "0:a", "-c:a", "aac", "-b:a", "192k", "-async", "1"]);
             else
                 parts.Add("-an");
         }
 
-        var useHwFrames = useDdagrab &&
-            _encoderSelector.Selected.Kind is VideoEncoderKind.Nvenc or VideoEncoderKind.Qsv;
-        parts.AddRange(_encoderSelector.GetVideoEncodeArgs(settings.QualityPreset, useHwFrames));
+        parts.AddRange(_encoderSelector.GetVideoEncodeArgs(preset, useHardwareFrames: false));
+        parts.AddRange(["-movflags", "+faststart", outputPath]);
 
-        parts.AddRange([
-            "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
-            Quote(outputPath)
-        ]);
-
-        return string.Join(" ", parts);
+        return EscapeArgs(parts);
     }
 
-    private static string Quote(string value)
+    private static string EscapeArgs(IReadOnlyList<string> parts)
     {
-        if (value.Contains('"'))
-            value = value.Replace("\"", "\\\"");
-        return $"\"{value}\"";
+        static string Escape(string value)
+        {
+            if (value.Length == 0)
+                return "\"\"";
+
+            if (value.StartsWith('[') && value.EndsWith(']'))
+                return value;
+
+            var needsQuotes =
+                value.Any(c => char.IsWhiteSpace(c) || c is '"' or '&' or '^' or '|') ||
+                value.Contains('\\') ||
+                (value.Contains('=') && value.Contains('['));
+
+            if (!needsQuotes)
+                return value;
+
+            return $"\"{value.Replace("\"", "\\\"")}\"";
+        }
+
+        return string.Join(" ", parts.Select(Escape));
     }
 
     private async Task DrainStreamAsync(StreamReader reader, CancellationToken token)

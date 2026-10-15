@@ -2,6 +2,10 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using RecBox.Models;
 using RecBox.Services;
@@ -51,16 +55,50 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        TrySetWindowIcon();
         _tray.Initialize();
         LoadDevicesIntoUi();
         ApplySettingsToUi();
+        RefreshSystemAudioAvailability();
 
         await _recording.EnsureReadyAsync();
         UpdateUiForState();
 
         if (!_ffmpegLocator.IsAvailable())
         {
-            ShowError("FFmpeg not found. Download a Windows build and place ffmpeg.exe in tools/ffmpeg (see the user guide).");
+            ShowError("FFmpeg not found. Run run.ps1 once, or place ffmpeg.exe in tools/ffmpeg (see the user guide).");
+        }
+    }
+
+    private void TrySetWindowIcon()
+    {
+        try
+        {
+            var ico = Path.Combine(AppContext.BaseDirectory, "Assets", "recbox.ico");
+            if (File.Exists(ico))
+                Icon = BitmapFrame.Create(new Uri(ico));
+        }
+        catch
+        {
+            // optional chrome polish
+        }
+    }
+
+    private void RefreshSystemAudioAvailability()
+    {
+        var available = _audioDeviceService.IsSystemAudioAvailable();
+        SystemAudioHint.Visibility = available ? Visibility.Collapsed : Visibility.Visible;
+
+        if (!available)
+        {
+            SystemAudioCheck.IsChecked = false;
+            SystemAudioCheck.IsEnabled = false;
+            _settings.RecordSystemAudio = false;
+            _settingsStore.Save(_settings);
+        }
+        else if (_recording.State is RecordingState.Idle or RecordingState.Error)
+        {
+            SystemAudioCheck.IsEnabled = true;
         }
     }
 
@@ -124,6 +162,8 @@ public partial class MainWindow : Window
 
             if (QualityCombo.SelectedItem is null && QualityCombo.Items.Count > 0)
                 QualityCombo.SelectedIndex = 1;
+
+            UpdateMonitorSummary();
         }
         finally
         {
@@ -138,7 +178,16 @@ public partial class MainWindow : Window
 
         CaptureSettingsFromUi();
         _settingsStore.Save(_settings);
+        UpdateMonitorSummary();
         UpdateSettingsEnabled();
+    }
+
+    private void UpdateMonitorSummary()
+    {
+        if (MonitorCombo.SelectedItem is MonitorInfo monitor)
+            MonitorSummaryText.Text = $"Monitor: {monitor.DisplayName}";
+        else
+            MonitorSummaryText.Text = string.Empty;
     }
 
     private void OutputFolderBox_LostFocus(object sender, RoutedEventArgs e) => SettingsChanged(sender, e);
@@ -268,40 +317,76 @@ public partial class MainWindow : Window
         }
     }
 
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+            return;
+        try { DragMove(); } catch { /* ignore */ }
+    }
+
+    private void Minimize_Click(object sender, RoutedEventArgs e)
+        => WindowState = WindowState.Minimized;
+
+    private void Close_Click(object sender, RoutedEventArgs e)
+        => Close();
+
     private void UpdateUiForState()
     {
         var state = _recording.State;
+        var textBrush = (System.Windows.Media.Brush)FindResource("TextBrush");
+        var muted = (System.Windows.Media.Brush)FindResource("MutedBrush");
+        var danger = (System.Windows.Media.Brush)FindResource("DangerBrush");
+        var ok = (System.Windows.Media.Brush)FindResource("SuccessBrush");
+        var tealGrad = (System.Windows.Media.Brush)FindResource("TealButtonGradient");
+        var recordGrad = (System.Windows.Media.Brush)FindResource("RecordButtonGradient");
+
         switch (state)
         {
             case RecordingState.Recording:
                 StatusText.Text = "Recording";
-                StatusText.Foreground = (System.Windows.Media.Brush)FindResource("DangerBrush");
-                RecordButton.Content = "Stop recording";
-                RecordButton.Style = (Style)FindResource("DangerButton");
+                StatusText.Foreground = textBrush;
+                StatusDot.Fill = danger;
+                RecordLabel.Text = "Stop";
+                RecordLabel.Foreground = (System.Windows.Media.Brush)FindResource("DangerBrush");
                 TimerText.Text = _recording.Elapsed.ToString(@"hh\:mm\:ss");
+                TimerText.Foreground = danger;
+                RecordButton.IsEnabled = true;
+                SetRecordButtonFill(recordGrad);
+                StartPulse();
                 break;
             case RecordingState.Stopping:
                 StatusText.Text = "Stopping…";
-                StatusText.Foreground = (System.Windows.Media.Brush)FindResource("MutedBrush");
+                StatusText.Foreground = textBrush;
+                StatusDot.Fill = muted;
+                RecordLabel.Text = "Stopping";
+                RecordLabel.Foreground = muted;
                 RecordButton.IsEnabled = false;
+                StopPulse();
                 break;
             case RecordingState.Error:
-                StatusText.Text = "Error";
-                StatusText.Foreground = (System.Windows.Media.Brush)FindResource("DangerBrush");
-                RecordButton.Content = "Start recording";
-                RecordButton.Style = (Style)FindResource("PrimaryButton");
+                StatusText.Text = "Something went wrong";
+                StatusText.Foreground = textBrush;
+                StatusDot.Fill = danger;
+                RecordLabel.Text = "Retry";
+                RecordLabel.Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush");
                 RecordButton.IsEnabled = true;
+                SetRecordButtonFill(tealGrad);
+                StopPulse();
                 if (!string.IsNullOrEmpty(_recording.LastError))
                     ShowError(_recording.LastError);
                 break;
             default:
-                StatusText.Text = "Ready";
-                StatusText.Foreground = (System.Windows.Media.Brush)FindResource("SuccessBrush");
-                RecordButton.Content = "Start recording";
-                RecordButton.Style = (Style)FindResource("PrimaryButton");
+                StatusText.Text = "Ready to record";
+                StatusText.Foreground = textBrush;
+                StatusDot.Fill = ok;
+                RecordLabel.Text = "Start";
+                RecordLabel.Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush");
                 RecordButton.IsEnabled = true;
+                SetRecordButtonFill(tealGrad);
+                StopPulse();
                 if (_recording.Elapsed == TimeSpan.Zero)
                     TimerText.Text = "00:00:00";
+                TimerText.Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush");
                 break;
         }
 
@@ -316,13 +401,50 @@ public partial class MainWindow : Window
         _tray.UpdateRecordingState(state == RecordingState.Recording);
     }
 
+    private void SetRecordButtonFill(System.Windows.Media.Brush fill)
+    {
+        RecordButton.ApplyTemplate();
+        if (RecordButton.Template?.FindName("Outer", RecordButton) is System.Windows.Shapes.Ellipse outer)
+            outer.Fill = fill;
+    }
+
+    private void StartPulse()
+    {
+        PulseRing.BeginAnimation(OpacityProperty, null);
+        PulseRing.BeginAnimation(WidthProperty, null);
+        PulseRing.BeginAnimation(HeightProperty, null);
+
+        var opacity = new DoubleAnimation(0.7, 0.0, TimeSpan.FromSeconds(1.2))
+        {
+            RepeatBehavior = RepeatBehavior.Forever
+        };
+        var size = new DoubleAnimation(88, 118, TimeSpan.FromSeconds(1.2))
+        {
+            RepeatBehavior = RepeatBehavior.Forever
+        };
+
+        PulseRing.BeginAnimation(OpacityProperty, opacity);
+        PulseRing.BeginAnimation(WidthProperty, size);
+        PulseRing.BeginAnimation(HeightProperty, size);
+    }
+
+    private void StopPulse()
+    {
+        PulseRing.BeginAnimation(OpacityProperty, null);
+        PulseRing.BeginAnimation(WidthProperty, null);
+        PulseRing.BeginAnimation(HeightProperty, null);
+        PulseRing.Opacity = 0;
+        PulseRing.Width = 108;
+        PulseRing.Height = 108;
+    }
+
     private void UpdateSettingsEnabled()
     {
         var enabled = _recording.State is RecordingState.Idle or RecordingState.Error;
         MonitorCombo.IsEnabled = enabled;
         MicrophoneCombo.IsEnabled = enabled && MicCheck.IsChecked == true;
         MicCheck.IsEnabled = enabled;
-        SystemAudioCheck.IsEnabled = enabled;
+        SystemAudioCheck.IsEnabled = enabled && _audioDeviceService.IsSystemAudioAvailable();
         QualityCombo.IsEnabled = enabled;
         OutputFolderBox.IsEnabled = enabled;
     }
@@ -344,7 +466,22 @@ public partial class MainWindow : Window
         if (_tray.IsExitRequested)
             return;
 
-        // Close button hides to tray so the window does not appear in recordings.
+        if (_recording.State == RecordingState.Recording)
+        {
+            var result = System.Windows.MessageBox.Show(
+                "A recording is in progress.\n\nYes — hide to tray and keep recording\nNo — stay on this window",
+                "RecBox",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                e.Cancel = true;
+                return;
+            }
+        }
+
+        // Close / Yes hides to tray so the window does not appear in recordings.
         e.Cancel = true;
         WindowState = WindowState.Minimized;
     }

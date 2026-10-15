@@ -10,6 +10,7 @@ public sealed class TrayService : IDisposable
     private TaskbarIcon? _trayIcon;
     private bool _isExitRequested;
     private bool _suppressMinimizeToTray;
+    private bool _shownTrayHint;
 
     public TrayService(Window window)
     {
@@ -112,7 +113,11 @@ public sealed class TrayService : IDisposable
         {
             _window.ShowInTaskbar = false;
             _window.Hide();
-            ShowBalloon("RecBox", "Still running in the system tray. Double-click the icon to restore.");
+            if (!_shownTrayHint)
+            {
+                _shownTrayHint = true;
+                ShowBalloon("RecBox", "Still running in the system tray. Double-click the icon to restore.");
+            }
         }
     }
 

@@ -16,7 +16,13 @@ Your FFmpeg build should include:
 
 ### Automatic (recommended)
 
-From the repository root:
+From the repository root, either:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run.ps1
+```
+
+or only download FFmpeg:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/download-ffmpeg.ps1
